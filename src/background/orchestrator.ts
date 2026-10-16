@@ -464,7 +464,7 @@ async function sendToGeminiContentScript(
       if (msg.type === 'GEMINI_PROGRESS') {
         const m = msg as GeminiProgressMessage;
         lastProgressTime = Date.now();
-        if (onSent) {
+        if (onSent && (m.charsReceived > 0 || m.elapsedMs > 2000)) {
           onSent();
           onSent = undefined;
         }

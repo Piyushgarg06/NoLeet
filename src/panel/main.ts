@@ -552,14 +552,14 @@ function renderResult(run: Run): void {
     const deepDiveSection = document.createElement('div');
     deepDiveSection.className = 'deep-dive-section';
     deepDiveSection.innerHTML = `
-      <button class="deep-dive-toggle" id="deep-dive-toggle" aria-expanded="false">
+      <button class="deep-dive-toggle expanded" id="deep-dive-toggle" aria-expanded="true">
         <div class="deep-dive-toggle-left">
           <span class="deep-dive-icon">📖</span>
           <span class="deep-dive-title">Detailed Analysis & Invariants</span>
         </div>
         <span class="deep-dive-chevron">▾</span>
       </button>
-      <div class="deep-dive-body" id="deep-dive-body" style="display: none;">
+      <div class="deep-dive-body" id="deep-dive-body" style="display: block;">
         ${hasSections
           ? sectionDefs.map(({ key, label, icon }) => {
               const content = sections[key];

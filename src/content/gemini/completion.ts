@@ -21,33 +21,22 @@ export interface CompletionResult {
   responseElement?: Element;
 }
 
+const MODEL_RESPONSE_SELECTOR = 'model-response, [data-response-id], .model-response';
+
 /**
  * Get all model/assistant response elements currently in the DOM.
- * Specifically excludes user queries so baseline count is always consistent.
+ * Uses a single unified selector so baseline counting is always consistent.
  */
 export function getResponseElements(): Element[] {
-  // 1. Primary: model-response custom element
-  const modelResponses = Array.from(document.querySelectorAll('model-response'));
-  if (modelResponses.length > 0) {
-    return modelResponses;
+  const primary = Array.from(document.querySelectorAll(MODEL_RESPONSE_SELECTOR));
+  if (primary.length > 0) {
+    return primary;
   }
 
-  // 2. Class-based model responses
-  const classResponses = Array.from(
-    document.querySelectorAll('.model-response, [data-response-id], .response-container')
-  );
-  if (classResponses.length > 0) {
-    return classResponses;
-  }
-
-  // 3. Any message-content that is NOT part of a user query
+  // Fallback: any message-content that is NOT inside a user-query
   const messageContents = Array.from(document.querySelectorAll('message-content, .message-content'))
     .filter(el => !el.closest('user-query, .user-query, [data-user-query]'));
-  if (messageContents.length > 0) {
-    return messageContents;
-  }
-
-  return [];
+  return messageContents;
 }
 
 /**
@@ -145,7 +134,15 @@ async function waitForNewResponse(
         }
       }
 
+      // Case 3: Emergency fallback before timeout expires (if any response exists, use it)
       if (Date.now() > timeout || signal.aborted) {
+        if (elements.length > 0) {
+          debugLog('waitForNewResponse: timeout reached, using latest available response element');
+          cleanup();
+          resolve_fn(elements[elements.length - 1]);
+          return;
+        }
+
         cleanup();
         resolve_fn(null);
         return;
@@ -201,12 +198,6 @@ async function waitForGenerationComplete(
     }
 
     const check = () => {
-      if (signal.aborted || Date.now() > generationDeadline) {
-        cleanup();
-        resolve_fn(done(false, lastText, sentinel, startTime, responseEl));
-        return;
-      }
-
       const now = Date.now();
       const currentText = getResponseText(responseEl, sentinel);
 
@@ -287,6 +278,13 @@ async function waitForGenerationComplete(
           error: 'RESPONSE_STALLED',
           responseElement: responseEl,
         });
+        return;
+      }
+
+      // 4. Deadline fallback: if generation deadline reached but text exists, return it!
+      if (signal.aborted || now > generationDeadline) {
+        cleanup();
+        resolve_fn(done(hasReceivedAnyText, lastText, sentinel, startTime, responseEl));
         return;
       }
     };
