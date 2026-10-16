@@ -142,9 +142,15 @@ export async function runAnalysis(
     );
   }
 
-  // Step 5: Immediately submit prompt and confirm transmission
-  await submitPromptImmediately(signal, baselineCount);
+  // Step 5: Wait for Send enabled and submit prompt
+  await waitForSendEnabled(signal);
+  checkSignal(signal);
+
+  await clickSend(signal, baselineCount);
   debugLog('driver: prompt submitted successfully');
+
+  // Notify orchestrator immediately so it can restore focus to LeetCode tab
+  onProgress(0, 0);
 
   // Step 6: Wait for completion
   checkSignal(signal);
@@ -177,13 +183,64 @@ export async function runAnalysis(
 }
 
 /**
- * Submit the prompt immediately and verify that Gemini has started processing.
- * Retries sending in a fast loop (every 60ms) until:
- * 1. The input is cleared by Gemini, OR
- * 2. The Stop button appears, OR
- * 3. A new response element appears.
+ * Wait briefly for the Send button to become enabled.
  */
-async function submitPromptImmediately(signal: AbortSignal, baselineCount: number): Promise<void> {
+async function waitForSendEnabled(signal: AbortSignal): Promise<void> {
+  const deadline = Date.now() + 2500;
+  const { element: inputEl } = resolve('promptInput');
+
+  return new Promise<void>((resolve_fn, reject) => {
+    const check = () => {
+      if (signal.aborted) {
+        cleanup();
+        reject(new DriverError('CANCELLED', 'Cancelled'));
+        return;
+      }
+
+      const { element: btn } = resolve('sendButton');
+      if (btn && !btn.hasAttribute('disabled') && btn.getAttribute('aria-disabled') !== 'true') {
+        cleanup();
+        resolve_fn();
+        return;
+      }
+
+      if (inputEl instanceof HTMLElement) {
+        inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText' }));
+      }
+
+      if (Date.now() > deadline) {
+        cleanup();
+        resolve_fn(); // Proceed to clickSend anyway
+        return;
+      }
+    };
+
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { attributes: true, subtree: true, childList: true });
+    const poll = setInterval(check, 80);
+    const onAbort = () => {
+      cleanup();
+      reject(new DriverError('CANCELLED', 'Cancelled'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    function cleanup() {
+      observer.disconnect();
+      clearInterval(poll);
+      signal.removeEventListener('abort', onAbort);
+    }
+
+    check();
+  });
+}
+
+/**
+ * Click the Send button and dispatch Enter key events.
+ * Retries until stop button appears, a new response appears, or deadline.
+ */
+async function clickSend(signal: AbortSignal, baselineCount: number): Promise<void> {
+  checkSignal(signal);
+
   const { element: inputEl } = resolve('promptInput');
   const deadline = Date.now() + 3500;
 
@@ -206,18 +263,17 @@ async function submitPromptImmediately(signal: AbortSignal, baselineCount: numbe
 
     let attempts = 0;
 
-    const trySubmit = () => {
+    const attempt = () => {
       if (signal.aborted) {
         onAbort();
         return;
       }
 
-      // Check if submission already succeeded:
+      // Check if send succeeded (stop button present or new response container appeared)
       const { element: stopBtn } = resolve('stopButton');
       const { elements: responses } = resolveAll('responseContainer');
-
       if (stopBtn || (attempts > 0 && responses.length > baselineCount)) {
-        debugLog('driver: prompt submission verified (stopBtn or new response)');
+        debugLog('driver: send confirmed by stop button or new response');
         cleanup();
         resolve_fn();
         return;
@@ -225,27 +281,7 @@ async function submitPromptImmediately(signal: AbortSignal, baselineCount: numbe
 
       attempts++;
 
-      // 1. Ensure caret is positioned at the end of inputEl
-      if (inputEl instanceof HTMLElement) {
-        try {
-          inputEl.focus();
-          const selection = window.getSelection();
-          if (selection) {
-            const range = document.createRange();
-            range.selectNodeContents(inputEl);
-            range.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          }
-
-          // Trigger input/change to wake up Angular form
-          inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText' }));
-        } catch {
-          // ignore
-        }
-      }
-
-      // 2. Click all candidate send buttons
+      // Click send button
       const { element: primarySendBtn } = resolve('sendButton');
       const candidateButtons: HTMLElement[] = [];
       if (primarySendBtn instanceof HTMLElement) {
@@ -281,13 +317,14 @@ async function submitPromptImmediately(signal: AbortSignal, baselineCount: numbe
         }
       }
 
-      // 3. Dispatch Enter keydown/keypress/keyup across all input targets
+      // Dispatch Enter key
       if (inputEl instanceof HTMLElement) {
         const targets = [inputEl.querySelector('p'), inputEl, inputEl.closest('rich-textarea')].filter(
           (el): el is HTMLElement => el instanceof HTMLElement
         );
         for (const target of targets) {
           try {
+            target.focus();
             const enterOpts = {
               key: 'Enter',
               code: 'Enter',
@@ -307,16 +344,14 @@ async function submitPromptImmediately(signal: AbortSignal, baselineCount: numbe
       }
 
       if (Date.now() > deadline) {
-        debugLog('driver: submit loop reached deadline, proceeding to wait for completion');
+        debugLog('driver: clickSend reached deadline, proceeding to wait for completion');
         cleanup();
         resolve_fn();
       }
     };
 
-    // Run first attempt immediately (0ms delay)
-    trySubmit();
-    // Then poll every 60ms until submitted
-    intervalId = setInterval(trySubmit, 60);
+    attempt();
+    intervalId = setInterval(attempt, 120);
   });
 }
 

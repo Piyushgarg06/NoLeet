@@ -316,6 +316,16 @@ async function executeRun(run: Run, signal: AbortSignal): Promise<void> {
   await updateProgress(run, 'Sending to Gemini…');
   checkAbort(signal, run);
 
+  // Briefly activate Gemini tab so Chromium grants it native focus, enabling execCommand and form sync
+  let switchedToGemini = false;
+  try {
+    await chrome.tabs.update(geminiTabId, { active: true });
+    switchedToGemini = true;
+    debugLog('orchestrator: activated gemini tab for submission');
+  } catch (e) {
+    debugLog('orchestrator: failed to activate gemini tab', e);
+  }
+
   // Unthrottle Gemini tab so background generation runs at full foreground speed
   try {
     await chrome.scripting.executeScript({
@@ -327,11 +337,34 @@ async function executeRun(run: Run, signal: AbortSignal): Promise<void> {
     debugLog('orchestrator: unthrottle script injection skipped/failed', e);
   }
 
+  const restoreLeetCodeTab = () => {
+    if (switchedToGemini && run.leetcodeTabId) {
+      chrome.tabs.update(run.leetcodeTabId, { active: true }).catch(() => undefined);
+      switchedToGemini = false;
+      debugLog('orchestrator: restored leetcode tab focus');
+    }
+  };
+
   // Establish long-lived port with content script
-  const geminiResult = await sendToGeminiContentScript(run, geminiTabId, prompt, run.nonce, signal);
+  const geminiResult = await sendToGeminiContentScript(
+    run,
+    geminiTabId,
+    prompt,
+    run.nonce,
+    signal,
+    restoreLeetCodeTab
+  );
+
+  // Ensure LeetCode tab is restored in all cases
+  restoreLeetCodeTab();
 
   if (!geminiResult.ok) {
     const error = geminiResult.error!;
+    if (geminiTabId) {
+      const tabToClose = geminiTabId;
+      run.geminiTabId = undefined;
+      await closeGeminiTab(tabToClose);
+    }
     await transitionError(run, error.code, error.message, error.retryable, error.diagnostics);
     return;
   }
@@ -357,8 +390,9 @@ async function executeRun(run: Run, signal: AbortSignal): Promise<void> {
 
   // Close the Gemini tab now that the output is displayed and persisted
   if (geminiTabId) {
-    await closeGeminiTab(geminiTabId);
+    const tabToClose = geminiTabId;
     run.geminiTabId = undefined;
+    await closeGeminiTab(tabToClose);
   }
 }
 
@@ -371,7 +405,8 @@ async function sendToGeminiContentScript(
   geminiTabId: number,
   prompt: string,
   nonce: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  onSent?: () => void
 ): Promise<{
   ok: boolean;
   markdown?: string;
@@ -429,6 +464,10 @@ async function sendToGeminiContentScript(
       if (msg.type === 'GEMINI_PROGRESS') {
         const m = msg as GeminiProgressMessage;
         lastProgressTime = Date.now();
+        if (onSent) {
+          onSent();
+          onSent = undefined;
+        }
         // Update run state to 'generating' once we start getting progress
         if (run.state !== 'generating') {
           run.state = 'generating';
@@ -443,6 +482,10 @@ async function sendToGeminiContentScript(
         broadcastState(run);
       } else if (msg.type === 'GEMINI_RESULT') {
         const m = msg as GeminiResultMessage;
+        if (onSent) {
+          onSent();
+          onSent = undefined;
+        }
         clearInterval(stallTimer);
         clearTimeout(overallTimer);
         signal.removeEventListener('abort', onAbort);
@@ -450,6 +493,10 @@ async function sendToGeminiContentScript(
         resolve({ ok: true, markdown: m.markdown, incomplete: m.incomplete });
       } else if (msg.type === 'GEMINI_ERROR') {
         const m = msg as GeminiErrorMessage;
+        if (onSent) {
+          onSent();
+          onSent = undefined;
+        }
         clearInterval(stallTimer);
         clearTimeout(overallTimer);
         signal.removeEventListener('abort', onAbort);
@@ -518,7 +565,7 @@ export function handleTabRemoved(tabId: number): void {
     debugLog('orchestrator: LeetCode tab closed mid-run');
     if (runAbortController) runAbortController.abort();
     transitionError(currentRun, 'NOT_A_PROBLEM_PAGE', 'LeetCode tab was closed', false).catch(() => undefined);
-  } else if (tabId === currentRun.geminiTabId) {
+  } else if (currentRun.geminiTabId && tabId === currentRun.geminiTabId) {
     debugLog('orchestrator: Gemini tab closed mid-run');
     transitionError(currentRun, 'GEMINI_TAB_LOST', 'Gemini tab was closed', true).catch(() => undefined);
   }
