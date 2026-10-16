@@ -53,7 +53,7 @@ You do **not** need to wait for the Chrome Web Store or know any programming to 
 1. Open Google Chrome (or any Chromium browser: Brave, Edge, Arc, Opera, Vivaldi).
 2. In the URL bar, go to:
    ```text
-   chrome://extensions
+   {Browser_Name}://extensions
    ```
 3. In the top-right corner, toggle on **Developer mode**.
 4. In the top-left corner, click the **Load unpacked** button.
