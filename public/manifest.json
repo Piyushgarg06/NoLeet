@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "NoLeet",
+  "version": "0.1.0",
+  "description": "NoLeet — A Chrome extension for free AI-powered LeetCode code analysis. No API keys, no tab switching, no LeetCode Premium. Just click Analyze.",
+  "minimum_chrome_version": "114",
+  "action": {
+    "default_title": "Open NoLeet"
+  },
+  "side_panel": {
+    "default_path": "panel/index.html"
+  },
+  "background": {
+    "service_worker": "background/index.js",
+    "type": "module"
+  },
+  "permissions": ["sidePanel", "scripting", "storage"],
+  "host_permissions": [
+    "https://leetcode.com/*",
+    "https://gemini.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content/gemini/index.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  }
+}

@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Production build artifacts
+dist/
+noleet.zip
+
+# Testing and coverage
+coverage/
+playwright-report/
+test-results/
+
+# System and Editor files
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.swp
+*.swo
