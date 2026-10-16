@@ -28,6 +28,7 @@ import {
   pingGeminiContentScript,
   unthrottleGeminiTab,
   closeGeminiTab,
+  resetChatViaDom,
   GeminiTabError,
 } from './geminiTab';
 import { buildPrompt, generateNonce } from '../shared/prompt';
@@ -352,10 +353,10 @@ async function executeRun(run: Run, signal: AbortSignal): Promise<void> {
   // Clear code snapshot from memory (do not persist it)
   run.codeSnapshot = undefined;
 
-  // Cleanly close the analysis tab so every future analysis starts fresh from scratch
+  // Cleanly reset the chat to a blank thread via DOM so subsequent analyses
+  // are completely fresh (zero context accumulation) without paying the 15s tab reload penalty
   if (geminiTabId) {
-    await closeGeminiTab(geminiTabId);
-    run.geminiTabId = undefined;
+    await resetChatViaDom(geminiTabId);
   }
 
   await persistRun(run);

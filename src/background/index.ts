@@ -12,7 +12,7 @@ import {
   handleTabUpdated,
   transitionError,
 } from './orchestrator';
-import { activateGeminiTabForSignIn } from './geminiTab';
+import { activateGeminiTabForSignIn, prewarmGeminiTab } from './geminiTab';
 import { makeStateUpdate } from '../shared/messages';
 
 // ---- Set up side panel behavior ----
@@ -28,6 +28,14 @@ chrome.runtime.onConnect.addListener(port => {
   if (port.name === 'panel') {
     debugLog('background: panel connected');
     registerPanelPort(port);
+
+    // Silently pre-warm Gemini in the background so it is already loaded before user clicks Analyze!
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => {
+      const active = tabs[0];
+      if (active?.windowId && active.url && CONFIG.LEETCODE_PROBLEMS_PATTERN.test(active.url)) {
+        prewarmGeminiTab(active.windowId);
+      }
+    }).catch(() => {});
 
     port.onMessage.addListener(async (msg: unknown) => {
       debugLog('background: message from panel', msg);
@@ -149,6 +157,13 @@ chrome.tabs.onRemoved.addListener((tabId, _info) => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   handleTabUpdated(tabId, changeInfo, tab);
+
+  // When user opens or navigates to a LeetCode problem, silently pre-warm Gemini in the background
+  if (changeInfo.status === 'complete' && tab.url && CONFIG.LEETCODE_PROBLEMS_PATTERN.test(tab.url)) {
+    if (tab.windowId) {
+      prewarmGeminiTab(tab.windowId);
+    }
+  }
 });
 
 // ---- Handle extension icon click (fallback if sidePanel API not available) ----

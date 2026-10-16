@@ -75,30 +75,54 @@ export async function findOrCreateGeminiTab(
 }
 
 /**
+ * Reset Gemini's chat via DOM or SPA navigation without reloading the page.
+ * Completely clears prior conversation context to start fresh in <50ms.
+ */
+export async function resetChatViaDom(tabId: number): Promise<void> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        // 1. Try "New chat" button in sidebar or header
+        const newChatBtn = document.querySelector(
+          'a[href="/app"], button[aria-label="New chat"], [data-test-id="new-chat-button"], button[aria-label*="New chat" i]'
+        );
+        if (newChatBtn instanceof HTMLElement) {
+          newChatBtn.click();
+          return;
+        }
+
+        // 2. Fallback: SPA client-side route navigation without page reload
+        if (window.location.pathname !== '/app') {
+          window.history.pushState(null, '', '/app');
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      },
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Navigate the Gemini tab to a fresh chat URL, or cleanly reset via DOM if already loaded.
  * Avoiding full page reload saves 15-20 seconds of cold Angular/Wasm re-hydration in background tabs.
  */
 export async function navigateToFreshChat(geminiTabId: number): Promise<void> {
   try {
     const tab = await chrome.tabs.get(geminiTabId);
-    if (tab && tab.url && new URL(tab.url).host === CONFIG.GEMINI_HOST && tab.status === 'complete') {
-      debugLog('geminiTab: tab already open and loaded, resetting chat via DOM instead of full reload');
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: geminiTabId },
-          func: () => {
-            const newChatBtn = document.querySelector(
-              'a[href="/app"], button[aria-label="New chat"], [data-test-id="new-chat-button"], button[aria-label*="New chat" i]'
-            );
-            if (newChatBtn instanceof HTMLElement) {
-              newChatBtn.click();
-            }
-          },
-        });
-      } catch {
-        // ignore
+    if (tab && tab.url && new URL(tab.url).host === CONFIG.GEMINI_HOST) {
+      if (tab.status === 'complete') {
+        debugLog('geminiTab: tab already open and loaded, resetting chat via DOM instead of full reload');
+        await resetChatViaDom(geminiTabId);
+        return;
+      } else {
+        // Tab was just created and is already loading GEMINI_APP_URL!
+        // Do NOT call tabs.update again (that cancels the first load and doubles the wait time)
+        debugLog('geminiTab: tab already loading, waiting for completion');
+        await waitForTabComplete(geminiTabId, CONFIG.GEMINI_TAB_LOAD_TIMEOUT_MS);
+        return;
       }
-      return;
     }
   } catch {
     // Tab check threw, proceed with full navigation
@@ -107,6 +131,22 @@ export async function navigateToFreshChat(geminiTabId: number): Promise<void> {
   debugLog('geminiTab: navigating to fresh chat', geminiTabId);
   await chrome.tabs.update(geminiTabId, { url: CONFIG.GEMINI_APP_URL });
   await waitForTabComplete(geminiTabId, CONFIG.GEMINI_TAB_LOAD_TIMEOUT_MS);
+}
+
+/**
+ * Pre-warm the Gemini background tab so it's fully loaded and hydrated
+ * BEFORE the user clicks Analyze.
+ */
+export async function prewarmGeminiTab(leetcodeWindowId: number): Promise<number | undefined> {
+  try {
+    const tabId = await findOrCreateGeminiTab(leetcodeWindowId, undefined);
+    await navigateToFreshChat(tabId);
+    debugLog('geminiTab: pre-warmed successfully', tabId);
+    return tabId;
+  } catch (e) {
+    debugLog('geminiTab: pre-warm skipped/failed', e);
+    return undefined;
+  }
 }
 
 /**
