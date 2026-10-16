@@ -23,9 +23,23 @@ export class GeminiTabError extends Error {
 }
 
 /**
- * Find an existing Gemini tab (by stored ID), or create a new one.
+ * Close the Gemini tab to ensure memory is released and every future
+ * analysis runs completely fresh from scratch.
+ */
+export async function closeGeminiTab(geminiTabId: number | undefined): Promise<void> {
+  if (geminiTabId === undefined) return;
+  try {
+    await chrome.tabs.remove(geminiTabId);
+    debugLog('geminiTab: closed tab', geminiTabId);
+  } catch {
+    // Tab might already be closed
+  }
+}
+
+/**
+ * Find an existing Gemini tab (by stored ID), or create a fresh dedicated one.
  * The tab is created inactive (active: false) in the same window as the LeetCode tab.
- * Returns the tab ID.
+ * Does not hijack existing user tabs to prevent polluting user conversations or accumulating context.
  */
 export async function findOrCreateGeminiTab(
   leetcodeWindowId: number,
@@ -41,22 +55,11 @@ export async function findOrCreateGeminiTab(
       }
     } catch {
       // Tab doesn't exist anymore
-      debugLog('geminiTab: stored tab gone, creating new one');
+      debugLog('geminiTab: stored tab gone, creating fresh one');
     }
   }
 
-  // Check if user already has an open Gemini tab in the browser
-  try {
-    const existing = await chrome.tabs.query({ url: 'https://gemini.google.com/*' });
-    if (existing.length > 0 && existing[0].id) {
-      debugLog('geminiTab: reusing existing open Gemini tab', existing[0].id);
-      return existing[0].id;
-    }
-  } catch {
-    // ignore
-  }
-
-  // Create a new inactive tab
+  // Create a fresh dedicated inactive tab
   const newTab = await chrome.tabs.create({
     url: CONFIG.GEMINI_APP_URL,
     active: false,
@@ -67,7 +70,7 @@ export async function findOrCreateGeminiTab(
     throw new GeminiTabError('GEMINI_TAB_LOST', 'Failed to create Gemini tab');
   }
 
-  debugLog('geminiTab: created new tab', newTab.id);
+  debugLog('geminiTab: created fresh dedicated tab', newTab.id);
   return newTab.id;
 }
 

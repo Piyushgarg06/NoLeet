@@ -27,6 +27,7 @@ import {
   navigateToFreshChat,
   pingGeminiContentScript,
   unthrottleGeminiTab,
+  closeGeminiTab,
   GeminiTabError,
 } from './geminiTab';
 import { buildPrompt, generateNonce } from '../shared/prompt';
@@ -351,6 +352,12 @@ async function executeRun(run: Run, signal: AbortSignal): Promise<void> {
   // Clear code snapshot from memory (do not persist it)
   run.codeSnapshot = undefined;
 
+  // Cleanly close the analysis tab so every future analysis starts fresh from scratch
+  if (geminiTabId) {
+    await closeGeminiTab(geminiTabId);
+    run.geminiTabId = undefined;
+  }
+
   await persistRun(run);
   broadcastState(run);
 }
@@ -486,6 +493,12 @@ export async function transitionError(
   run.state = 'error';
   run.error = { code, message, retryable, diagnostics };
   run.codeSnapshot = undefined; // never persist code
+
+  if (run.geminiTabId) {
+    await closeGeminiTab(run.geminiTabId);
+    run.geminiTabId = undefined;
+  }
+
   await persistRun(run);
   broadcastState(run);
 }
