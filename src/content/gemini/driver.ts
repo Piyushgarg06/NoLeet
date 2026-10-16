@@ -170,13 +170,20 @@ export async function runAnalysis(
   }
 
   // Step 7: Extract response markdown
-  const markdown = extractResponseMarkdown(baselineCount, nonce);
+  const markdown = extractResponseMarkdown(
+    completion.responseElement ?? null,
+    baselineCount,
+    nonce,
+    completion.text
+  );
   debugLog('driver: extracted markdown length', markdown.length);
 
-  const formatDeviation = !markdown.includes('## Approach') || !markdown.includes('## Time Complexity');
+  const finalMarkdown = markdown && markdown.trim().length > 0 ? markdown : completion.text;
+
+  const formatDeviation = !finalMarkdown.includes('## Approach') || !finalMarkdown.includes('## Time Complexity');
 
   return {
-    markdown,
+    markdown: finalMarkdown,
     incomplete: completion.incomplete && !completion.hadSentinel,
     formatDeviation,
   };

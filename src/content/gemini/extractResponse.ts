@@ -7,8 +7,10 @@
 // Does NOT read outside the response element.
 // ============================================================
 import TurndownService from 'turndown';
-import { resolveAll, SELECTOR_GROUPS } from './selectors';
-import { cleanDuplicatedMath } from '../../shared/parseAnalysis';
+import { SELECTOR_GROUPS } from './selectors';
+import { getResponseElements } from './completion';
+import { cleanDuplicatedMath, stripSentinel } from '../../shared/parseAnalysis';
+import { debugLog } from '../../shared/config';
 
 let turndownService: TurndownService | null = null;
 
@@ -120,41 +122,65 @@ function cleanMathElements(el: Element): void {
 }
 
 /**
- * Extract the response as clean Markdown from the last response element beyond baseline.
+ * Extract the response as clean Markdown from the response element.
  *
- * @param baselineCount - number of response elements before the run
+ * @param responseEl - the exact element identified by completion detection
+ * @param baselineCount - number of response elements before the run (fallback query)
  * @param nonce - the nonce to use for sentinel stripping
+ * @param fallbackText - plain text snapshot captured during completion detection
  */
-export function extractResponseMarkdown(baselineCount: number, nonce: string): string {
-  const { elements } = resolveAll('responseContainer');
+export function extractResponseMarkdown(
+  responseEl: Element | null,
+  baselineCount: number,
+  nonce: string,
+  fallbackText?: string
+): string {
+  // 1. Determine target element
+  let target: Element | null = responseEl;
+  if (!target) {
+    const elements = getResponseElements();
+    const newElements = elements.slice(baselineCount);
+    target = newElements.length > 0 ? newElements[newElements.length - 1] : (elements.length > 0 ? elements[elements.length - 1] : null);
+  }
 
-  // Get only elements beyond the baseline
-  const newElements = elements.slice(baselineCount);
-  if (newElements.length === 0) return '';
+  if (!target) {
+    debugLog('extractResponse: no target element, using fallbackText');
+    return cleanDuplicatedMath(stripSentinel(fallbackText || '', nonce).trim());
+  }
 
-  // Take the last one
-  const lastResponse = newElements[newElements.length - 1];
-
-  // Remove UI chrome elements and deduplicate math before extraction
-  const cloned = lastResponse.cloneNode(true) as Element;
+  // 2. Clone and clean
+  const cloned = target.cloneNode(true) as Element;
   removeUiChrome(cloned);
   cleanMathElements(cloned);
 
-  // Find the markdown root within the response
+  // 3. Find markdown root
   const markdownRoot = findMarkdownRoot(cloned) ?? cloned;
 
-  // Convert to Markdown
-  const td = getTurndownService();
-  let markdown = td.turndown(markdownRoot.innerHTML || markdownRoot.textContent || '');
-
-  // Strip sentinel line
-  const sentinel = `END-OF-ANALYSIS-${nonce}`;
-  const sentinelIdx = markdown.lastIndexOf(sentinel);
-  if (sentinelIdx !== -1) {
-    markdown = markdown.slice(0, sentinelIdx).replace(/\s+$/, '');
+  // 4. Convert HTML to Markdown via Turndown
+  let markdown = '';
+  try {
+    const td = getTurndownService();
+    const html = markdownRoot.innerHTML;
+    if (html && html.trim().length > 0) {
+      markdown = td.turndown(html);
+    }
+  } catch (e) {
+    debugLog('extractResponse: turndown conversion threw, using text content fallback', e);
   }
 
-  // Clean any remaining duplicated math tokens
+  // 5. Fallback to raw text if Turndown produced empty or whitespace
+  if (!markdown || markdown.trim().length === 0) {
+    markdown = (markdownRoot.textContent || target.textContent || fallbackText || '').replace(/\r\n/g, '\n');
+  }
+
+  // 6. Strip sentinel line
+  markdown = stripSentinel(markdown, nonce);
+
+  // 7. If sentinel stripping or empty response left it blank, use fallbackText
+  if (!markdown.trim() && fallbackText) {
+    markdown = stripSentinel(fallbackText, nonce);
+  }
+
   return cleanDuplicatedMath(markdown.trim());
 }
 
@@ -173,7 +199,7 @@ function removeUiChrome(el: Element): void {
   }
 
   // Also remove common UI elements by aria-label
-  const uiLabels = ['Copy', 'Share', 'Thumbs up', 'Thumbs down', 'Like', 'Dislike', 'More options'];
+  const uiLabels = ['Copy', 'Share', 'Thumbs up', 'Thumbs down', 'Like', 'Dislike', 'More options', 'Show drafts', 'Listen'];
   for (const label of uiLabels) {
     try {
       el.querySelectorAll(`[aria-label="${label}"]`).forEach(node => node.remove());
@@ -187,7 +213,14 @@ function removeUiChrome(el: Element): void {
  * Find the markdown content root within a response element.
  */
 function findMarkdownRoot(el: Element): Element | null {
-  const selectors = ['.markdown', '.model-response-text', '.markdown-main-panel', '.response-content'];
+  const selectors = [
+    'message-content',
+    '.message-content',
+    '.markdown',
+    '.model-response-text',
+    '.markdown-main-panel',
+    '.response-content',
+  ];
   for (const sel of selectors) {
     const found = el.querySelector(sel);
     if (found) return found;
