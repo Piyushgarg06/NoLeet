@@ -115,7 +115,13 @@ function clearContentEditable(el: HTMLElement): void {
 async function tryExecCommandInsert(el: HTMLElement, text: string): Promise<InsertionResult> {
   try {
     el.focus();
-    clearContentEditable(el);
+    const selection = window.getSelection();
+    if (selection) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
     await tick();
 
     const succeeded = document.execCommand('insertText', false, text);

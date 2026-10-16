@@ -10,7 +10,7 @@
 // 6. waitForCompletion() — complete detection with progress streaming
 // 7. extractResponseMarkdown() — DOM → Markdown
 // ============================================================
-import { resolve, selectorHealthCheck, getDomOutline } from './selectors';
+import { resolve, resolveAll, selectorHealthCheck, getDomOutline } from './selectors';
 import { insertTextIntoContentEditable } from './insertText';
 import { waitForCompletion, countResponseElements } from './completion';
 import { extractResponseMarkdown } from './extractResponse';
@@ -142,13 +142,9 @@ export async function runAnalysis(
     );
   }
 
-  // Wait a bit for the send button to enable
-  await waitForSendEnabled(signal);
-  checkSignal(signal);
-
-  // Step 5: Click Send button (fallback: Enter key)
-  await clickSend(signal);
-  debugLog('driver: send clicked');
+  // Step 5: Immediately submit prompt and confirm transmission
+  await submitPromptImmediately(signal, baselineCount);
+  debugLog('driver: prompt submitted successfully');
 
   // Step 6: Wait for completion
   checkSignal(signal);
@@ -176,126 +172,144 @@ export async function runAnalysis(
 }
 
 /**
- * Wait briefly for the Send button to become enabled (up to 1,000ms max).
+ * Submit the prompt immediately and verify that Gemini has started processing.
+ * Retries sending in a fast loop (every 60ms) until:
+ * 1. The input is cleared by Gemini, OR
+ * 2. The Stop button appears, OR
+ * 3. A new response element appears.
  */
-async function waitForSendEnabled(signal: AbortSignal): Promise<void> {
-  const deadline = Date.now() + 1000;
+async function submitPromptImmediately(signal: AbortSignal, baselineCount: number): Promise<void> {
   const { element: inputEl } = resolve('promptInput');
+  const deadline = Date.now() + 3500;
 
   return new Promise<void>((resolve_fn, reject) => {
-    const check = () => {
-      if (signal.aborted) { reject(new DriverError('CANCELLED', 'Cancelled')); return; }
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
-      const { element: btn } = resolve('sendButton');
-      if (btn && !btn.hasAttribute('disabled') && btn.getAttribute('aria-disabled') !== 'true') {
+    const cleanup = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      signal.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+      cleanup();
+      reject(new DriverError('CANCELLED', 'Cancelled'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    const trySubmit = () => {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+
+      // Check if submission already succeeded:
+      const { element: stopBtn } = resolve('stopButton');
+      const { elements: responses } = resolveAll('responseContainer');
+      const inputCleared = inputEl instanceof HTMLElement && inputEl.innerText.trim().length === 0;
+
+      if (stopBtn || responses.length > baselineCount || inputCleared) {
+        debugLog('driver: prompt submission verified (stopBtn, new response, or cleared input)');
         cleanup();
         resolve_fn();
         return;
       }
 
-      // Re-trigger input event to wake up Angular form control if still idle
+      // 1. Ensure caret is positioned at the end of inputEl
       if (inputEl instanceof HTMLElement) {
-        inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText' }));
+        try {
+          inputEl.focus();
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(inputEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+
+          // Trigger input/change to wake up Angular form
+          inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText' }));
+        } catch {
+          // ignore
+        }
+      }
+
+      // 2. Click all candidate send buttons
+      const { element: primarySendBtn } = resolve('sendButton');
+      const candidateButtons: HTMLElement[] = [];
+      if (primarySendBtn instanceof HTMLElement) {
+        candidateButtons.push(primarySendBtn);
+      }
+      const additionalButtons = document.querySelectorAll(
+        'button[aria-label*="Send" i], button[aria-label*="Submit" i], button.send-button, .send-button-container button, rich-textarea ~ * button, div:has(> rich-textarea) button'
+      );
+      additionalButtons.forEach(btn => {
+        if (btn instanceof HTMLElement && !candidateButtons.includes(btn)) {
+          candidateButtons.push(btn);
+        }
+      });
+
+      for (const btn of candidateButtons) {
+        try {
+          btn.removeAttribute('disabled');
+          btn.setAttribute('aria-disabled', 'false');
+          btn.classList.remove('disabled');
+
+          btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, composed: true }));
+          btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }));
+          btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, composed: true }));
+          btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, composed: true }));
+          btn.click();
+
+          const icon = btn.querySelector('mat-icon, svg');
+          if (icon instanceof HTMLElement) {
+            icon.click();
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 3. Dispatch Enter keydown/keypress/keyup across all input targets
+      if (inputEl instanceof HTMLElement) {
+        const targets = [inputEl.querySelector('p'), inputEl, inputEl.closest('rich-textarea')].filter(
+          (el): el is HTMLElement => el instanceof HTMLElement
+        );
+        for (const target of targets) {
+          try {
+            const enterOpts = {
+              key: 'Enter',
+              code: 'Enter',
+              keyCode: 13,
+              which: 13,
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+            };
+            target.dispatchEvent(new KeyboardEvent('keydown', enterOpts));
+            target.dispatchEvent(new KeyboardEvent('keypress', enterOpts));
+            target.dispatchEvent(new KeyboardEvent('keyup', enterOpts));
+          } catch {
+            // ignore
+          }
+        }
       }
 
       if (Date.now() > deadline) {
+        debugLog('driver: submit loop reached deadline, proceeding to wait for completion');
         cleanup();
-        resolve_fn(); // Proceed to clickSend immediately
-        return;
+        resolve_fn();
       }
     };
 
-    const observer = new MutationObserver(check);
-    observer.observe(document.body, { attributes: true, subtree: true, childList: true });
-    const poll = setInterval(check, 80);
-    const onAbort = () => { cleanup(); reject(new DriverError('CANCELLED', 'Cancelled')); };
-    signal.addEventListener('abort', onAbort, { once: true });
-
-    function cleanup() {
-      observer.disconnect();
-      clearInterval(poll);
-      signal.removeEventListener('abort', onAbort);
-    }
-
-    check();
+    // Run first attempt immediately (0ms delay)
+    trySubmit();
+    // Then poll every 60ms until submitted
+    intervalId = setInterval(trySubmit, 60);
   });
-}
-
-/**
- * Click the Send button and dispatch Enter key events.
- */
-async function clickSend(signal: AbortSignal): Promise<void> {
-  checkSignal(signal);
-
-  const { element: primarySendBtn } = resolve('sendButton');
-  const { element: inputEl } = resolve('promptInput');
-
-  debugLog('driver: clickSend executing, primarySendBtn found:', Boolean(primarySendBtn));
-
-  let sendTriggered = false;
-
-  // Gather all plausible send buttons on the page
-  const candidateButtons: HTMLElement[] = [];
-  if (primarySendBtn instanceof HTMLElement) {
-    candidateButtons.push(primarySendBtn);
-  }
-  const additionalButtons = document.querySelectorAll(
-    'button[aria-label*="Send" i], button[aria-label*="Submit" i], button.send-button, .send-button-container button, rich-textarea ~ * button, div:has(> rich-textarea) button'
-  );
-  additionalButtons.forEach(btn => {
-    if (btn instanceof HTMLElement && !candidateButtons.includes(btn)) {
-      candidateButtons.push(btn);
-    }
-  });
-
-  // Attempt clicking candidates
-  for (const btn of candidateButtons) {
-    try {
-      btn.removeAttribute('disabled');
-      btn.setAttribute('aria-disabled', 'false');
-      btn.classList.remove('disabled');
-
-      btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, composed: true }));
-      btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }));
-      btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, composed: true }));
-      btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, composed: true }));
-      btn.click();
-      sendTriggered = true;
-      debugLog('driver: sendBtn clicked', btn);
-    } catch (e) {
-      debugLog('driver: sendBtn click threw', e);
-    }
-  }
-
-  // Also dispatch Enter on inputEl and its inner <p> elements
-  if (inputEl instanceof HTMLElement) {
-    const targets = [inputEl.querySelector('p'), inputEl].filter((el): el is HTMLElement => el instanceof HTMLElement);
-    for (const target of targets) {
-      try {
-        target.focus();
-        const enterOpts = {
-          key: 'Enter',
-          code: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        };
-        target.dispatchEvent(new KeyboardEvent('keydown', enterOpts));
-        target.dispatchEvent(new KeyboardEvent('keypress', enterOpts));
-        target.dispatchEvent(new KeyboardEvent('keyup', enterOpts));
-        sendTriggered = true;
-        debugLog('driver: Enter key dispatched on', target.tagName);
-      } catch (e) {
-        debugLog('driver: Enter key dispatch threw', e);
-      }
-    }
-  }
-
-  if (!sendTriggered) {
-    throw new DriverError('SUBMIT_FAILED', 'Could not find Send button or input to send', {}, true);
-  }
 }
 
 function checkSignal(signal: AbortSignal): void {
