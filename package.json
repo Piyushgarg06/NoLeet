@@ -1,6 +1,6 @@
 {
   "name": "noleet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "NoLeet — A Chrome extension for free AI-powered LeetCode code analysis. No API keys, no tab switching, no LeetCode Premium. Just click Analyze.",
   "private": true,
   "type": "module",
