@@ -21,6 +21,46 @@ export interface InsertionResult {
   warning?: string;
 }
 
+export function notifyInputUpdated(el: HTMLElement, text: string): void {
+  try {
+    el.focus();
+    el.dispatchEvent(new Event('focus', { bubbles: true }));
+
+    const paragraphs = el.querySelectorAll('p');
+    const targets: HTMLElement[] = paragraphs.length > 0 ? (Array.from(paragraphs) as HTMLElement[]).concat(el) : [el];
+
+    for (const target of targets) {
+      target.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        inputType: 'insertText',
+        data: text,
+      }));
+      target.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        inputType: 'insertText',
+        data: text,
+      }));
+      target.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      target.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      target.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true, composed: true }));
+    }
+
+    // Also notify rich-textarea custom element wrapper
+    const richTextarea = el.closest('rich-textarea') || el.parentElement;
+    if (richTextarea && richTextarea !== el) {
+      richTextarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText' }));
+      richTextarea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      richTextarea.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Insert text into a contenteditable element.
  * Tries strategies in order; verifies after each attempt.
@@ -40,25 +80,30 @@ export async function insertTextIntoContentEditable(
 
   // Strategy A: execCommand('insertText')
   const resultA = await tryExecCommandInsert(element, text);
-  if (resultA.ok) return resultA;
+  if (resultA.ok) {
+    notifyInputUpdated(element, text);
+    return resultA;
+  }
 
   // Strategy B: synthetic paste event
   const resultB = await tryPasteEventInsert(element, text);
-  if (resultB.ok) return resultB;
+  if (resultB.ok) {
+    notifyInputUpdated(element, text);
+    return resultB;
+  }
 
   // Strategy C: direct DOM manipulation + input event
   const resultC = await tryDirectDomInsert(element, text);
+  notifyInputUpdated(element, text);
   return resultC;
 }
 
 function clearContentEditable(el: HTMLElement): void {
-  // Select all and delete
   try {
     el.focus();
     document.execCommand('selectAll', false);
     document.execCommand('delete', false);
   } catch {
-    // Fallback: direct clear
     el.innerHTML = '';
   }
 }
@@ -135,21 +180,27 @@ async function tryPasteEventInsert(el: HTMLElement, text: string): Promise<Inser
   }
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 /**
- * Strategy C: direct DOM manipulation + dispatch input event
- * Less reliable for framework state but a last resort.
+ * Strategy C: structured DOM manipulation (paragraphs) + dispatch input events
+ * Ensures Gemini's rich-textarea structure is preserved.
  */
 async function tryDirectDomInsert(el: HTMLElement, text: string): Promise<InsertionResult> {
   try {
     el.focus();
 
-    // Set text content directly (preserving newlines as <br> or <p> tags)
-    // For Quill-style editors, we use plain text
-    el.textContent = text;
+    // Split text into paragraphs matching Gemini's internal rich-textarea model
+    const lines = text.split('\n');
+    el.innerHTML = lines.map(line => `<p>${escapeHtml(line) || '<br>'}</p>`).join('');
 
-    // Dispatch input event to notify the framework
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
     await tick();
 
     const actual = getContentEditableText(el);
@@ -161,8 +212,8 @@ async function tryDirectDomInsert(el: HTMLElement, text: string): Promise<Insert
       insertedLength: text.length,
       verifiedLength: actual.length,
       warning: verified
-        ? 'Direct DOM insertion used — framework state may not be fully synced'
-        : `Insertion failed: expected ${text.length}, got ${actual.length}`,
+        ? undefined
+        : `Insertion length difference: expected ${text.length}, got ${actual.length}`,
     };
   } catch (e) {
     return { ok: false, strategy: 'direct-dom', insertedLength: 0, verifiedLength: 0, warning: String(e) };

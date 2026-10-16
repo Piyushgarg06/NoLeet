@@ -215,7 +215,15 @@ export function unthrottleGeminiTab(): void {
       get: () => false,
       configurable: true,
     });
+    try {
+      Document.prototype.hasFocus = () => true;
+      document.hasFocus = () => true;
+    } catch {
+      // ignore
+    }
     window.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('focus'));
 
     // 2. Unfreeze requestAnimationFrame when tab is hidden
     const origRAF = window.requestAnimationFrame.bind(window);
