@@ -230,8 +230,11 @@ async function tryDirectDomInsert(el: HTMLElement, text: string): Promise<Insert
  * Get the text content of a contenteditable element, normalizing newlines.
  */
 function getContentEditableText(el: HTMLElement): string {
-  // innerText preserves newlines better than textContent for rendered elements
-  return (el.innerText ?? el.textContent ?? '').replace(/\r\n/g, '\n');
+  const text = el.innerText;
+  if (text && text.trim().length > 0) {
+    return text.replace(/\r\n/g, '\n');
+  }
+  return (el.textContent ?? '').replace(/\r\n/g, '\n');
 }
 
 /**

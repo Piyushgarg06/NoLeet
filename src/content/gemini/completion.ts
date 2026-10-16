@@ -188,8 +188,8 @@ async function waitForGenerationComplete(
         return;
       }
 
-      // Fallback: stop button gone and text stable (handles missing sentinel)
-      if (stopGone && stable) {
+      // Fallback: stop button gone and text stable (MUST only trigger if text was actually produced)
+      if (stopGone && stable && lastText.trim().length > 0) {
         cleanup();
         resolve_fn(done(true, lastText, sentinel, startTime));
         return;

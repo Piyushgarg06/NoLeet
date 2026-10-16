@@ -151,11 +151,16 @@ export async function runAnalysis(
   const completion = await waitForCompletion(baselineCount, nonce, signal, onProgress);
   debugLog('driver: completion result', { ...completion, text: `[${completion.text.length} chars]` });
 
-  if (completion.error === 'GEMINI_ERROR_MESSAGE') {
-    throw new DriverError('GEMINI_ERROR_MESSAGE', 'Gemini returned an error in the response', {}, true);
+  if (completion.error) {
+    throw new DriverError(
+      completion.error === 'No new response appeared' ? 'SUBMIT_FAILED' : completion.error,
+      completion.error,
+      { completion },
+      true
+    );
   }
-  if (completion.error === 'RESPONSE_STALLED') {
-    throw new DriverError('RESPONSE_STALLED', 'Response stalled mid-generation', {}, true);
+  if (!completion.text || completion.text.trim().length === 0) {
+    throw new DriverError('EMPTY_RESPONSE', 'Gemini did not return any response', { completion }, true);
   }
 
   // Step 7: Extract response markdown
@@ -199,6 +204,8 @@ async function submitPromptImmediately(signal: AbortSignal, baselineCount: numbe
     };
     signal.addEventListener('abort', onAbort, { once: true });
 
+    let attempts = 0;
+
     const trySubmit = () => {
       if (signal.aborted) {
         onAbort();
@@ -208,14 +215,15 @@ async function submitPromptImmediately(signal: AbortSignal, baselineCount: numbe
       // Check if submission already succeeded:
       const { element: stopBtn } = resolve('stopButton');
       const { elements: responses } = resolveAll('responseContainer');
-      const inputCleared = inputEl instanceof HTMLElement && inputEl.innerText.trim().length === 0;
 
-      if (stopBtn || responses.length > baselineCount || inputCleared) {
-        debugLog('driver: prompt submission verified (stopBtn, new response, or cleared input)');
+      if (stopBtn || (attempts > 0 && responses.length > baselineCount)) {
+        debugLog('driver: prompt submission verified (stopBtn or new response)');
         cleanup();
         resolve_fn();
         return;
       }
+
+      attempts++;
 
       // 1. Ensure caret is positioned at the end of inputEl
       if (inputEl instanceof HTMLElement) {
