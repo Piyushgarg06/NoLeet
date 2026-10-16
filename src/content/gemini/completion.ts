@@ -84,7 +84,7 @@ async function waitForNewResponse(
     observer.observe(document.body, { childList: true, subtree: true });
 
     // Safety net polling (handles hidden-tab throttling)
-    const pollInterval = setInterval(check, 1_000);
+    const pollInterval = setInterval(check, 300);
 
     const onAbort = () => { cleanup(); resolve_fn(null); };
     signal.addEventListener('abort', onAbort, { once: true });
@@ -180,26 +180,19 @@ async function waitForGenerationComplete(
         return;
       }
 
-      // All three conditions
-      const hasSentinel = lastText.includes(sentinel);
-      if (stopGone && stable && hasSentinel) {
+      // Fast Sentinel Detection:
+      // The moment the sentinel arrives, Gemini has emitted its final line!
+      if (currentText.includes(sentinel)) {
         cleanup();
-        resolve_fn(done(true, lastText, sentinel, startTime));
+        resolve_fn(done(true, currentText, sentinel, startTime));
         return;
       }
 
-      // Conditions 1+2 hold but no sentinel — wait grace period
-      if (stopGone && stable && !hasSentinel && stabilityReachedAt) {
-        const gracePassed = now - stabilityReachedAt > CONFIG.COMPLETION_GRACE_MS;
-        if (gracePassed) {
-          cleanup();
-          resolve_fn({
-            complete: false, incomplete: true,
-            text: lastText, hadSentinel: false,
-            elapsedMs: now - startTime,
-          });
-          return;
-        }
+      // Fallback: stop button gone and text stable (handles missing sentinel)
+      if (stopGone && stable) {
+        cleanup();
+        resolve_fn(done(true, lastText, sentinel, startTime));
+        return;
       }
 
       // Stall detection: text unchanged for too long while stop button still present
@@ -207,7 +200,7 @@ async function waitForGenerationComplete(
         cleanup();
         resolve_fn({
           complete: false, incomplete: true,
-          text: lastText, hadSentinel: hasSentinel,
+          text: lastText, hadSentinel: false,
           elapsedMs: now - startTime,
           error: 'RESPONSE_STALLED',
         });
@@ -221,8 +214,8 @@ async function waitForGenerationComplete(
     // Also observe for stop button changes
     observer.observe(document.body, { childList: true, subtree: false });
 
-    // Safety-net polling (hidden tab throttling)
-    const pollInterval = setInterval(check, 1_000);
+    // Safety-net polling (handles hidden tab timer throttling)
+    const pollInterval = setInterval(check, 300);
 
     const onAbort = () => { cleanup(); resolve_fn(done(false, lastText, sentinel, startTime)); };
     signal.addEventListener('abort', onAbort, { once: true });

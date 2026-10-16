@@ -17,7 +17,7 @@ export const CONFIG = {
   OVERALL_RUN_CAP_MS: 240_000,              // 4 min hard cap
 
   // Completion detection
-  STABILITY_WINDOW_MS: 3_000,              // Response must be unchanged for this long
+  STABILITY_WINDOW_MS: 1_500,              // Response must be unchanged for this long
   COMPLETION_GRACE_MS: 10_000,             // Extra grace period if sentinel missing after stop
   PROGRESS_REPORT_INTERVAL_MS: 1_000,     // Max frequency of GEMINI_PROGRESS messages
 

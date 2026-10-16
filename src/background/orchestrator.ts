@@ -26,6 +26,7 @@ import {
   findOrCreateGeminiTab,
   navigateToFreshChat,
   pingGeminiContentScript,
+  unthrottleGeminiTab,
   GeminiTabError,
 } from './geminiTab';
 import { buildPrompt, generateNonce } from '../shared/prompt';
@@ -313,6 +314,17 @@ async function executeRun(run: Run, signal: AbortSignal): Promise<void> {
   await transitionState(run, 'submitting');
   await updateProgress(run, 'Sending to Gemini…');
   checkAbort(signal, run);
+
+  // Unthrottle Gemini tab so background generation runs at full foreground speed
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: geminiTabId },
+      world: 'MAIN',
+      func: unthrottleGeminiTab,
+    });
+  } catch (e) {
+    debugLog('orchestrator: unthrottle script injection skipped/failed', e);
+  }
 
   // Establish long-lived port with content script
   const geminiResult = await sendToGeminiContentScript(run, geminiTabId, prompt, run.nonce, signal);

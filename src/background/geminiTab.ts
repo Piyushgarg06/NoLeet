@@ -199,6 +199,53 @@ export async function activateGeminiTabForSignIn(geminiTabId: number): Promise<v
   );
 }
 
+/**
+ * Injected into the Gemini tab (MAIN world) to prevent background tab throttling.
+ * Chromium aggressively throttles timers, freezes requestAnimationFrame, and
+ * pauses web app rendering when a tab is hidden/backgrounded.
+ */
+export function unthrottleGeminiTab(): void {
+  try {
+    // 1. Spoof visibilityState and hidden so Gemini's web client continues rendering
+    Object.defineProperty(Document.prototype, 'visibilityState', {
+      get: () => 'visible',
+      configurable: true,
+    });
+    Object.defineProperty(Document.prototype, 'hidden', {
+      get: () => false,
+      configurable: true,
+    });
+    window.dispatchEvent(new Event('visibilitychange'));
+
+    // 2. Unfreeze requestAnimationFrame when tab is hidden
+    const origRAF = window.requestAnimationFrame.bind(window);
+    let lastTime = 0;
+    window.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+      let fired = false;
+      const fallbackTimer = setTimeout(() => {
+        if (!fired) {
+          fired = true;
+          const now = performance.now();
+          const next = Math.max(0, 16 - (now - lastTime));
+          lastTime = now + next;
+          callback(lastTime);
+        }
+      }, 25);
+
+      return origRAF((time) => {
+        if (!fired) {
+          fired = true;
+          clearTimeout(fallbackTimer);
+          callback(time);
+        }
+      });
+    };
+  } catch {
+    // ignore
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
