@@ -27,7 +27,6 @@ import {
   navigateToFreshChat,
   pingGeminiContentScript,
   unthrottleGeminiTab,
-  closeGeminiTab,
   resetChatViaDom,
   GeminiTabError,
 } from './geminiTab';
@@ -494,12 +493,6 @@ export async function transitionError(
   run.state = 'error';
   run.error = { code, message, retryable, diagnostics };
   run.codeSnapshot = undefined; // never persist code
-
-  if (run.geminiTabId) {
-    await closeGeminiTab(run.geminiTabId);
-    run.geminiTabId = undefined;
-  }
-
   await persistRun(run);
   broadcastState(run);
 }
@@ -513,9 +506,14 @@ function checkAbort(signal: AbortSignal, run: Run): void {
 
 /**
  * Handle tab removal (LeetCode or Gemini closed mid-run).
+ * Never triggers an error if the analysis is already done.
  */
 export function handleTabRemoved(tabId: number): void {
-  if (!currentRun) return;
+  if (!currentRun || currentRun.state === 'done') return;
+
+  const isRunning = ['extracting', 'preparing_gemini', 'submitting', 'generating', 'capturing'].includes(currentRun.state);
+  if (!isRunning) return;
+
   if (tabId === currentRun.leetcodeTabId) {
     debugLog('orchestrator: LeetCode tab closed mid-run');
     if (runAbortController) runAbortController.abort();

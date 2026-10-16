@@ -80,29 +80,32 @@ html, body {
 }
 
 .panel-header {
-  padding: 14px 16px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-card);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .panel-logo {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
 }
 
 .panel-logo-icon {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   background: linear-gradient(135deg, hsl(245, 85%, 60%), hsl(280, 75%, 60%));
-  border-radius: 7px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 14px;
+  font-size: 13px;
   flex-shrink: 0;
 }
 
@@ -111,11 +114,86 @@ html, body {
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.2px;
+  line-height: 1.2;
 }
 
 .panel-subtitle {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.header-analyze-btn {
+  background: linear-gradient(135deg, hsl(245, 85%, 60%), hsl(280, 75%, 60%));
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+
+.header-analyze-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+  filter: brightness(1.1);
+}
+
+.header-analyze-btn:active {
+  transform: translateY(0);
+}
+
+.header-analyze-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.result-top-bar {
+  margin-bottom: 12px;
+}
+
+.top-analyze-btn {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, hsl(245, 85%, 60%), hsl(280, 75%, 60%));
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.top-analyze-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(99, 102, 241, 0.45);
+  filter: brightness(1.08);
+}
+
+.top-analyze-btn:active {
+  transform: translateY(0);
+}
+
+.top-analyze-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .panel-body {

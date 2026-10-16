@@ -374,6 +374,25 @@ function renderResult(run: Run): void {
     wrapper.appendChild(b);
   }
 
+  // Top quick-action bar: user can analyze again or analyze a different problem without scrolling
+  const topActionBar = document.createElement('div');
+  topActionBar.className = 'result-top-bar';
+  topActionBar.innerHTML = `
+    <button id="top-analyze-btn" class="btn btn-primary top-analyze-btn">
+      ✨ Analyze Active Code
+    </button>
+  `;
+  topActionBar.querySelector('#top-analyze-btn')?.addEventListener('click', () => {
+    const btn = topActionBar.querySelector('#top-analyze-btn') as HTMLButtonElement;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Analyzing…';
+    }
+    sendToBackground(makePanelStart());
+    announceText('Starting code analysis…');
+  });
+  wrapper.appendChild(topActionBar);
+
   // 1. Top status header & motivational banner
   const topHeader = document.createElement('div');
   topHeader.className = 'premium-header-bar';
@@ -741,16 +760,28 @@ function createPanel(): Element {
           <div class="panel-logo-icon" aria-hidden="true">✦</div>
           <div>
             <div class="panel-title">NoLeet</div>
-            <div class="panel-subtitle">Free AI-powered LeetCode code analysis</div>
+            <div class="panel-subtitle">Free AI code analysis</div>
           </div>
         </div>
+        <button id="header-analyze-btn" class="header-analyze-btn" title="Analyze Code (Alt + A)">
+          ⚡ Analyze
+        </button>
       </header>
       <main class="panel-body" id="panel-body" role="main" aria-label="Analysis panel"></main>
       <footer class="panel-footer">
-        <div class="footer-note">NoLeet · Free LeetCode code analysis · No API keys, no tab switching, no LeetCode Premium</div>
+        <div class="footer-note">NoLeet · Free LeetCode analysis · No API keys, no tab switching</div>
       </footer>
     </div>
   `;
+
+  const headerBtn = root.querySelector('#header-analyze-btn') as HTMLButtonElement;
+  headerBtn?.addEventListener('click', () => {
+    headerBtn.disabled = true;
+    headerBtn.textContent = '⏳ Analyzing…';
+    sendToBackground(makePanelStart());
+    announceText('Starting code analysis…');
+  });
+
   return root.querySelector('.panel')!;
 }
 
