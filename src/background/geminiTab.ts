@@ -72,16 +72,37 @@ export async function findOrCreateGeminiTab(
 }
 
 /**
- * Navigate the Gemini tab to a fresh chat URL and wait for it to be ready.
- * Throws GeminiTabError if navigation fails or times out.
+ * Navigate the Gemini tab to a fresh chat URL, or cleanly reset via DOM if already loaded.
+ * Avoiding full page reload saves 15-20 seconds of cold Angular/Wasm re-hydration in background tabs.
  */
 export async function navigateToFreshChat(geminiTabId: number): Promise<void> {
+  try {
+    const tab = await chrome.tabs.get(geminiTabId);
+    if (tab && tab.url && new URL(tab.url).host === CONFIG.GEMINI_HOST && tab.status === 'complete') {
+      debugLog('geminiTab: tab already open and loaded, resetting chat via DOM instead of full reload');
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: geminiTabId },
+          func: () => {
+            const newChatBtn = document.querySelector(
+              'a[href="/app"], button[aria-label="New chat"], [data-test-id="new-chat-button"], button[aria-label*="New chat" i]'
+            );
+            if (newChatBtn instanceof HTMLElement) {
+              newChatBtn.click();
+            }
+          },
+        });
+      } catch {
+        // ignore
+      }
+      return;
+    }
+  } catch {
+    // Tab check threw, proceed with full navigation
+  }
+
   debugLog('geminiTab: navigating to fresh chat', geminiTabId);
-
-  // Navigate to the app URL (fresh chat)
   await chrome.tabs.update(geminiTabId, { url: CONFIG.GEMINI_APP_URL });
-
-  // Wait for tab to complete loading
   await waitForTabComplete(geminiTabId, CONFIG.GEMINI_TAB_LOAD_TIMEOUT_MS);
 }
 
@@ -225,26 +246,64 @@ export function unthrottleGeminiTab(): void {
     window.dispatchEvent(new Event('focus'));
     document.dispatchEvent(new Event('focus'));
 
-    // 2. Unfreeze requestAnimationFrame when tab is hidden
-    const origRAF = window.requestAnimationFrame.bind(window);
-    let lastTime = 0;
-    window.requestAnimationFrame = (callback: FrameRequestCallback): number => {
-      let fired = false;
-      const fallbackTimer = setTimeout(() => {
-        if (!fired) {
-          fired = true;
-          const now = performance.now();
-          const next = Math.max(0, 16 - (now - lastTime));
-          lastTime = now + next;
-          callback(lastTime);
+    // 2. Audio keepalive to signal Chrome C++ that tab is active/audible
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
         }
-      }, 25);
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0.0001; // inaudible
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+      }
+    } catch {
+      // ignore
+    }
 
+    // 3. Unfreeze requestAnimationFrame using MessageChannel (immune to 1000ms timer throttling)
+    // In background tabs, setTimeout/setInterval is clamped to 1000ms.
+    // MessageChannel port messaging runs on the microtask/event queue without timer clamping.
+    const rafCallbacks = new Set<FrameRequestCallback>();
+    const channel = new MessageChannel();
+    let isScheduling = false;
+
+    channel.port1.onmessage = () => {
+      isScheduling = false;
+      const now = performance.now();
+      const current = Array.from(rafCallbacks);
+      rafCallbacks.clear();
+      for (const cb of current) {
+        try {
+          cb(now);
+        } catch {
+          // ignore callback error
+        }
+      }
+    };
+
+    const origRAF = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+      rafCallbacks.add(callback);
+      if (!isScheduling) {
+        isScheduling = true;
+        channel.port2.postMessage(null);
+      }
+
+      // Also call original RAF for when tab is foregrounded
       return origRAF((time) => {
-        if (!fired) {
-          fired = true;
-          clearTimeout(fallbackTimer);
-          callback(time);
+        if (rafCallbacks.has(callback)) {
+          rafCallbacks.delete(callback);
+          try {
+            callback(time);
+          } catch {
+            // ignore callback error
+          }
         }
       });
     };
