@@ -1,14 +1,26 @@
 # NoLeet ⚡
 
 <p align="center">
-  <strong>A Chrome extension for free AI-powered LeetCode code analysis. No API keys, no tab switching, no LeetCode Premium. Just click Analyze.</strong>
+  <strong>A Chrome extension for free AI-powered LeetCode code analysis. No API keys, no manual tab juggling, no LeetCode Premium. Just click Analyze.</strong>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
   <img src="https://img.shields.io/badge/Manifest-V3-success.svg" alt="Manifest V3" />
   <img src="https://img.shields.io/badge/Chrome-114%2B-orange.svg" alt="Chrome 114+" />
-  <img src="https://img.shields.io/badge/Privacy-100%25%20Local-purple.svg" alt="100% Local" />
+  <img src="https://img.shields.io/badge/Privacy-No%20NoLeet%20Servers-purple.svg" alt="No NoLeet Servers" />
+</p>
+
+---
+
+## 📺 Demo
+
+<p align="center">
+  <img src="demo.gif" alt="NoLeet Demo" width="100%" style="max-height: 520px; border-radius: 8px;" />
+</p>
+
+<p align="center">
+  <sub><em>(Brief 1–2s automatic switch to Gemini during analysis is a Chrome throttling workaround — see <a href="#-how-it-works--faq">How It Works</a> below).</em></sub>
 </p>
 
 ---
@@ -17,11 +29,11 @@
 
 LeetCode Premium charges over **$35/month** just to get AI code explanations, approach tips, and complexity analysis. Alternatively, copying and pasting code back and forth between LeetCode and ChatGPT or Claude breaks your focus and flow.
 
-**NoLeet gives you the full LeetCode Premium AI experience completely free**, right inside Chrome's native Side Panel:
+**NoLeet provides a free alternative to LeetCode Premium's AI analysis**, right inside Chrome's native Side Panel:
 - ❌ **No API Keys** (uses your existing Google Gemini web session)
-- ❌ **No Tab Switching** (runs right alongside your problem in the Side Panel)
+- ❌ **No Manual Tab Switching** (analysis streams directly alongside your problem in the Side Panel)
 - ❌ **No Subscription Fees** (100% free and open-source)
-- ❌ **No Data Collection** (runs locally on your machine with zero external servers)
+- ❌ **No NoLeet Servers** (zero middleman backends or databases — your code goes only to your own Gemini session)
 
 ---
 
@@ -32,7 +44,7 @@ LeetCode Premium charges over **$35/month** just to get AI code explanations, ap
 - 🪢 **Algorithm & Approach Detection**: Automatically identifies algorithms (Hash Table, Two Pointers, Sliding Window, Binary Search, DP, DFS/BFS, Monotonic Stack, etc.) and highlights optimal alternatives.
 - 💡 **Refined Code Snippets**: Provides clean, actionable code improvements with a single-click copy button.
 - 📖 **Deep-Dive Invariants & Edge Cases**: Collapsible drawer with correctness checks, edge cases, and auxiliary space breakdown without cluttering your screen with walls of text.
-- 🚀 **Blazing Fast**: Engineered prompt templates that generate complete analysis cards in ~4–6 seconds.
+- 🚀 **Fast Turnaround**: Typically a few seconds, depending on Gemini and your connection.
 
 ---
 
@@ -53,7 +65,9 @@ You do **not** need to wait for the Chrome Web Store or know any programming to 
 1. Open Google Chrome (or any Chromium browser: Brave, Edge, Arc, Opera, Vivaldi).
 2. In the URL bar, go to:
    ```text
-   {Browser_Name}://extensions
+   chrome://extensions
+   or
+   brave://extensions
    ```
 3. In the top-right corner, toggle on **Developer mode**.
 4. In the top-left corner, click the **Load unpacked** button.
@@ -70,6 +84,7 @@ You do **not** need to wait for the Chrome Web Store or know any programming to 
 2. **Open LeetCode**: Go to any problem on [leetcode.com/problems/...](https://leetcode.com/problems/).
 3. **Open NoLeet**: Click the NoLeet extension icon in your Chrome toolbar to open the Side Panel.
 4. **Click Analyze**: Hit the **✨ Analyze Code** button. NoLeet reads your current editor code (including unsaved edits) and displays your analysis cards in seconds!
+   *(Note: The brief 1–2 second tab focus to Gemini is fully automated to bypass browser background throttling when inserting prompt information).*
 
 ---
 
@@ -101,17 +116,32 @@ Then open `chrome://extensions`, enable **Developer mode**, click **Load unpacke
 
 ## 🔒 Privacy & Permissions
 
-NoLeet was designed with a privacy-first architecture:
+NoLeet was designed with a transparent, privacy-first architecture:
 
-- **Zero Backend Servers**: NoLeet has no server, database, or analytics. It communicates strictly between your LeetCode tab and your Gemini tab inside your own browser.
-- **No Telemetry or Tracking**: No cookies, no trackers, no external analytics libraries.
-- **Ephemeral Code Handling**: Your code is read only during analysis and discarded from memory immediately after Gemini responds.
+- **No NoLeet Servers**: NoLeet operates with **zero external or middleman servers**, databases, or proxy backends. Your code goes strictly to Google Gemini through **your own signed-in browser session** (identical to you manually opening Gemini and pasting your code).
+- **No Telemetry or Tracking**: No cookies, no trackers, and no external analytics libraries.
+- **Zero Retention by NoLeet**: Your code is held in memory only while creating the prompt and is discarded immediately after sending. Google handles the prompt according to your account's Gemini privacy settings and chat history.
 - **Minimal Permissions**:
   - `sidePanel`: Displays the analysis interface alongside LeetCode.
   - `scripting`: Extracts code from the Monaco editor in your active LeetCode tab.
   - `storage`: Preserves temporary run state during analysis.
   - `https://leetcode.com/*`: Reads problem titles and editor code.
   - `https://gemini.google.com/*`: Automates query input in your own signed-in Gemini tab.
+
+---
+
+## ⚠️ Limitations
+
+- **Gemini Web UI Dependency**: Depends on the Gemini web UI, so a Gemini update may temporarily break it until an extension patch is released.
+
+---
+
+## ⚙️ How It Works & FAQ
+
+### Why does NoLeet briefly switch to the Gemini tab for 1–2 seconds?
+When you click **Analyze Code**, you will notice Chrome briefly bring your Gemini tab into focus for about 1–2 seconds before returning to LeetCode.
+
+This is **100% automated by the extension** (not done manually). Chromium browsers aggressively throttle background tabs, timers, and DOM events. In an inactive background tab, scripts cannot reliably or immediately insert text into complex rich editors like Gemini's input field. Bringing the tab to the foreground for just a moment bypasses this browser throttling limit so the prompt is submitted instantly. Once submitted, your analysis streams cleanly straight into your LeetCode Side Panel.
 
 ---
 
