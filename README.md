@@ -16,11 +16,11 @@
 ## 📺 Demo
 
 <p align="center">
-  <img src="demo.gif" alt="NoLeet Demo" width="100%" style="max-height: 520px; border-radius: 8px;" />
+  <img src="demo.gif?raw=true" alt="NoLeet Demo" width="100%" style="border-radius: 8px;" />
 </p>
 
 <p align="center">
-  <sub><em>(Brief 1–2s automatic switch to Gemini during analysis is a Chrome throttling workaround — see <a href="#-how-it-works--faq">How It Works</a> below).</em></sub>
+  <sub><em>(Brief 1–2s automatic switch to Gemini during analysis is a Chrome throttling workaround — see <a href="#how-it-works">How It Works</a> below).</em></sub>
 </p>
 
 ---
@@ -136,6 +136,7 @@ NoLeet was designed with a transparent, privacy-first architecture:
 
 ---
 
+<a id="how-it-works"></a>
 ## ⚙️ How It Works & FAQ
 
 ### Why does NoLeet briefly switch to the Gemini tab for 1–2 seconds?
