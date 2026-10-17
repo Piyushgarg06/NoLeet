@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="logo.png" alt="NoLeet Logo" width="96" height="96" />
-</p>
-
-<h1 align="center">NoLeet ⚡</h1>
+<h1 align="center">
+  <img src="logo.png" alt="NoLeet Logo" width="36" height="36" valign="middle" style="vertical-align: middle; margin-right: 8px;" /> NoLeet ⚡
+</h1>
 
 <p align="center">
   <strong>A Chrome extension for free AI-powered LeetCode code analysis. No API keys, no manual tab juggling, no LeetCode Premium. Just click Analyze.</strong>
