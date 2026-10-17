@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64" role="img" aria-label="NoLeet mark">
-  <rect width="64" height="64" rx="16" fill="#14131A"/>
-  <path d="M12 52L52 32L52 12C44 44 30 52 12 52Z" fill="#C6F135" opacity="0.28"/>
-  <path d="M12 52C30 52 44 44 52 12" stroke="#F4F3EE" stroke-width="7" stroke-linecap="square" fill="none"/>
-  <path d="M12 52L52 32" stroke="#C6F135" stroke-width="7" stroke-linecap="square" fill="none"/>
-</svg>
