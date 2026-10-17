@@ -9,6 +9,7 @@
   --color-primary-hover: #8b5cf6;
   --color-primary-light: rgba(157, 114, 255, 0.12);
   --color-accent: #c084fc;
+  --color-brand-accent: #C6F135;
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
@@ -97,30 +98,85 @@ html, body {
 }
 
 .panel-logo-icon {
-  width: 24px;
-  height: 24px;
-  background: linear-gradient(135deg, hsl(245, 85%, 60%), hsl(280, 75%, 60%));
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 13px;
   flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.panel-logo-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .panel-title {
-  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.2px;
-  line-height: 1.2;
+  letter-spacing: -0.6px;
+  line-height: 1.1;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.panel-title-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 3px;
+  background: var(--color-brand-accent, #C6F135);
+  margin-bottom: 1px;
 }
 
 .panel-subtitle {
   font-size: 10px;
   color: var(--text-muted);
   line-height: 1.2;
+}
+
+/* ---- Idle placeholder ---- */
+.idle-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.idle-placeholder-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.idle-placeholder-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.idle-placeholder-text {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
 }
 
 .header-analyze-btn {

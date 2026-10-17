@@ -1,4 +1,6 @@
-# NoLeet ⚡
+<p align="center">
+  <img src="./logo.png" alt="NoLeet Logo" width="420" />
+</p>
 
 <p align="center">
   <strong>A Chrome extension for free AI-powered LeetCode code analysis. No API keys, no manual tab juggling, no LeetCode Premium. Just click Analyze.</strong>

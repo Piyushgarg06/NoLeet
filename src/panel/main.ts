@@ -184,7 +184,14 @@ async function renderIdle(run: Run | null): Promise<void> {
       ` : ''}
       ${!isOnProblem ? `
         <div class="idle-placeholder">
-          <div class="idle-placeholder-icon">🔍</div>
+          <div class="idle-placeholder-icon" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 64 64" fill="none" role="img" aria-label="NoLeet mark">
+              <rect width="64" height="64" rx="16" fill="#14131A"/>
+              <path d="M12 52L52 32L52 12C44 44 30 52 12 52Z" fill="#C6F135" opacity="0.28"/>
+              <path d="M12 52C30 52 44 44 52 12" stroke="#F4F3EE" stroke-width="8" stroke-linecap="square"/>
+              <path d="M12 52L52 32" stroke="#C6F135" stroke-width="8" stroke-linecap="square"/>
+            </svg>
+          </div>
           <div class="idle-placeholder-text">Open a LeetCode problem page to begin</div>
           <div class="text-muted text-small mt-2">Navigate to leetcode.com/problems/...</div>
         </div>
@@ -757,9 +764,16 @@ function createPanel(): Element {
     <div class="panel">
       <header class="panel-header">
         <div class="panel-logo">
-          <div class="panel-logo-icon" aria-hidden="true">✦</div>
+          <div class="panel-logo-icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 64 64" fill="none" role="img" aria-label="NoLeet mark">
+              <rect width="64" height="64" rx="16" fill="#14131A"/>
+              <path d="M12 52L52 32L52 12C44 44 30 52 12 52Z" fill="#C6F135" opacity="0.28"/>
+              <path d="M12 52C30 52 44 44 52 12" stroke="#F4F3EE" stroke-width="8" stroke-linecap="square"/>
+              <path d="M12 52L52 32" stroke="#C6F135" stroke-width="8" stroke-linecap="square"/>
+            </svg>
+          </div>
           <div>
-            <div class="panel-title">NoLeet</div>
+            <div class="panel-title"><span>noleet</span><span class="panel-title-cursor"></span></div>
             <div class="panel-subtitle">Free AI code analysis</div>
           </div>
         </div>
